@@ -57,20 +57,37 @@ jobs:
 
       - name: Stage Artifacts
         run: |
-          $BuildType = "${{ steps.config.outputs.BUILD_TYPE }}"
-          $SourceBin = "build/rundir/$BuildType/obs-plugins/64bit"
           $StageDir = "staging"
-          
           New-Item -ItemType Directory -Force -Path $StageDir
           
-          if (Test-Path "$SourceBin/*.dll") {
-              Copy-Item "$SourceBin/*.dll" -Destination $StageDir
-              Copy-Item "$SourceBin/*.pdb" -Destination $StageDir -ErrorAction SilentlyContinue
+          $PluginName = "${{ steps.config.outputs.NAME }}"
+          
+          Write-Host "Artifacts aranıyor: $PluginName.dll ..."
+          
+          $DllFile = Get-ChildItem -Path "build" -Filter "$PluginName.dll" -Recurse | Select-Object -First 1
+          
+          if ($DllFile) {
+              Write-Host "DLL Bulundu: $($DllFile.FullName)"
+              Copy-Item $DllFile.FullName -Destination $StageDir
           } else {
-              Write-Error "DLL files not found in $SourceBin"
+              Write-Warning "DLL not found! Build folder:"
+              Get-ChildItem -Path "build" -Recurse | Select-Object FullName
+              Write-Error "DLL file ($PluginName.dll) not found inside build directory!"
+          }
+
+          $PdbFile = Get-ChildItem -Path "build" -Filter "$PluginName.pdb" -Recurse | Select-Object -First 1
+          if ($PdbFile) {
+              Write-Host "PDB Found: $($PdbFile.FullName)"
+              Copy-Item $PdbFile.FullName -Destination $StageDir
+          }
+
+          if (Test-Path "data") {
+              Write-Host "Data folder copying..."
+              Copy-Item "data" -Destination "$StageDir/data" -Recurse
           }
           
-          Get-ChildItem $StageDir
+          Write-Host "Packaging Completed. Contents:"
+          Get-ChildItem $StageDir -Recurse
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
