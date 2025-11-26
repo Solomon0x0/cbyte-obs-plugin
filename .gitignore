@@ -1,14 +1,10 @@
-# Exclude everything
 /*
 
-# Except for default project files
-!/.github
-!/build-aux
-!/cmake
-!/data
-!/src
+!/cmake/
+!/src/
+!/data/
+
 !.clang-format
-!.gersemirc
 !.gitignore
 !buildspec.json
 !CMakeLists.txt
@@ -16,11 +12,13 @@
 !LICENSE
 !README.md
 
-# Exclude lock files
+*.user
+*.suo
+*.opensdf
+*.sdf
+*.ipch
 *.lock.json
-
-# Exclude macOS legacy resource forks
 .DS_Store
+Thumbs.db
 
-# Exclude CMake build number cache
 /cmake/.CMakeBuildNumber

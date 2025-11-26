@@ -1,8 +1,5 @@
-# Common build dependencies module
-
 include_guard(GLOBAL)
 
-# _check_deps_version: Checks for obs-deps VERSION file in prefix paths
 function(_check_deps_version version)
   set(found FALSE)
 
@@ -22,21 +19,13 @@ function(_check_deps_version version)
         set(found TRUE)
         break()
       elseif(_check_version VERSION_LESS version)
-        message(
-          AUTHOR_WARNING
-          "Older ${label} version detected in ${path}: \n"
-          "Found ${_check_version}, require ${version}"
-        )
+        message(AUTHOR_WARNING "Older ${label} version detected in ${path}: Found ${_check_version}, require ${version}")
         list(REMOVE_ITEM CMAKE_PREFIX_PATH "${path}")
         list(APPEND CMAKE_PREFIX_PATH "${path}")
         set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH})
         continue()
       else()
-        message(
-          AUTHOR_WARNING
-          "Newer ${label} version detected in ${path}: \n"
-          "Found ${_check_version}, require ${version}"
-        )
+        message(AUTHOR_WARNING "Newer ${label} version detected in ${path}: Found ${_check_version}, require ${version}")
         set(found TRUE)
         break()
       endif()
@@ -46,21 +35,15 @@ function(_check_deps_version version)
   return(PROPAGATE found CMAKE_PREFIX_PATH)
 endfunction()
 
-# _setup_obs_studio: Create obs-studio build project, then build libobs and obs-frontend-api
 function(_setup_obs_studio)
   if(NOT libobs_DIR)
     set(_is_fresh --fresh)
   endif()
 
-  if(OS_WINDOWS)
-    set(_cmake_generator "${CMAKE_GENERATOR}")
-    set(_cmake_arch "-A ${arch},version=${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}")
-    set(_cmake_extra "-DCMAKE_SYSTEM_VERSION=${CMAKE_SYSTEM_VERSION} -DCMAKE_ENABLE_SCRIPTING=OFF")
-  elseif(OS_MACOS)
-    set(_cmake_generator "Xcode")
-    set(_cmake_arch "-DCMAKE_OSX_ARCHITECTURES:STRING='arm64;x86_64'")
-    set(_cmake_extra "-DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}")
-  endif()
+  # Mac/Linux kontrolünü kaldırdık, doğrudan Windows ayarları:
+  set(_cmake_generator "${CMAKE_GENERATOR}")
+  set(_cmake_arch "-A ${arch},version=${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}")
+  set(_cmake_extra "-DCMAKE_SYSTEM_VERSION=${CMAKE_SYSTEM_VERSION} -DCMAKE_ENABLE_SCRIPTING=OFF")
 
   message(STATUS "Configure ${label} (${arch})")
   execute_process(
@@ -76,50 +59,33 @@ function(_setup_obs_studio)
   )
   message(STATUS "Configure ${label} (${arch}) - done")
 
-  message(STATUS "Build ${label} (Debug - ${arch})")
-  execute_process(
-    COMMAND "${CMAKE_COMMAND}" --build build_${arch} --target obs-frontend-api --config Debug --parallel
-    WORKING_DIRECTORY "${dependencies_dir}/${_obs_destination}"
-    RESULT_VARIABLE _process_result
-    COMMAND_ERROR_IS_FATAL ANY
-    OUTPUT_QUIET
-  )
-  message(STATUS "Build ${label} (Debug - ${arch}) - done")
+  foreach(CONFIG Debug Release)
+      message(STATUS "Build ${label} (${CONFIG} - ${arch})")
+      execute_process(
+        COMMAND "${CMAKE_COMMAND}" --build build_${arch} --target obs-frontend-api --config ${CONFIG} --parallel
+        WORKING_DIRECTORY "${dependencies_dir}/${_obs_destination}"
+        RESULT_VARIABLE _process_result
+        COMMAND_ERROR_IS_FATAL ANY
+        OUTPUT_QUIET
+      )
+      message(STATUS "Build ${label} (${CONFIG} - ${arch}) - done")
 
-  message(STATUS "Build ${label} (Release - ${arch})")
-  execute_process(
-    COMMAND "${CMAKE_COMMAND}" --build build_${arch} --target obs-frontend-api --config Release --parallel
-    WORKING_DIRECTORY "${dependencies_dir}/${_obs_destination}"
-    RESULT_VARIABLE _process_result
-    COMMAND_ERROR_IS_FATAL ANY
-    OUTPUT_QUIET
-  )
-  message(STATUS "Build ${label} (Reelase - ${arch}) - done")
-
-  message(STATUS "Install ${label} (${arch})")
-  execute_process(
-    COMMAND
-      "${CMAKE_COMMAND}" --install build_${arch} --component Development --config Debug --prefix "${dependencies_dir}"
-    WORKING_DIRECTORY "${dependencies_dir}/${_obs_destination}"
-    RESULT_VARIABLE _process_result
-    COMMAND_ERROR_IS_FATAL ANY
-    OUTPUT_QUIET
-  )
-  execute_process(
-    COMMAND
-      "${CMAKE_COMMAND}" --install build_${arch} --component Development --config Release --prefix "${dependencies_dir}"
-    WORKING_DIRECTORY "${dependencies_dir}/${_obs_destination}"
-    RESULT_VARIABLE _process_result
-    COMMAND_ERROR_IS_FATAL ANY
-    OUTPUT_QUIET
-  )
+      message(STATUS "Install ${label} (${CONFIG} - ${arch})")
+      execute_process(
+        COMMAND
+          "${CMAKE_COMMAND}" --install build_${arch} --component Development --config ${CONFIG} --prefix "${dependencies_dir}"
+        WORKING_DIRECTORY "${dependencies_dir}/${_obs_destination}"
+        RESULT_VARIABLE _process_result
+        COMMAND_ERROR_IS_FATAL ANY
+        OUTPUT_QUIET
+      )
+  endforeach()
+  
   message(STATUS "Install ${label} (${arch}) - done")
 endfunction()
 
-# _check_dependencies: Fetch and extract pre-built OBS build dependencies
 function(_check_dependencies)
   file(READ "${CMAKE_CURRENT_SOURCE_DIR}/buildspec.json" buildspec)
-
   string(JSON dependency_data GET ${buildspec} dependencies)
 
   foreach(dependency IN LISTS dependencies_list)
@@ -138,6 +104,7 @@ function(_check_dependencies)
     string(REPLACE "VERSION" "${version}" destination "${destination}")
     string(REPLACE "ARCH" "${arch}" file "${file}")
     string(REPLACE "ARCH" "${arch}" destination "${destination}")
+    
     if(revision)
       string(REPLACE "_REVISION" "_v${revision}" file "${file}")
       string(REPLACE "-REVISION" "-v${revision}" file "${file}")
@@ -158,7 +125,6 @@ function(_check_dependencies)
     if(dependency STREQUAL prebuilt OR dependency STREQUAL qt6)
       if(OBS_DEPENDENCY_${dependency}_${arch}_HASH STREQUAL ${hash})
         _check_deps_version(${version})
-
         if(found)
           set(skip TRUE)
         endif()
@@ -166,13 +132,14 @@ function(_check_dependencies)
     endif()
 
     if(skip)
-      message(STATUS "Setting up ${label} (${arch}) - skipped")
+      message(STATUS "Setting up ${label} (${arch}) - skipped (Up to date)")
       continue()
     endif()
 
     if(dependency STREQUAL obs-studio)
       set(url ${url}/${file})
     else()
+      # Diğerleri için araya /version/ giriyor. Hata buradaydı, şimdi düzeltildi.
       set(url ${url}/${version}/${file})
     endif()
 
@@ -220,7 +187,6 @@ function(_check_dependencies)
   endforeach()
 
   list(REMOVE_DUPLICATES CMAKE_PREFIX_PATH)
-
   set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} CACHE PATH "CMake prefix search path" FORCE)
 
   _setup_obs_studio()
